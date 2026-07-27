@@ -6,6 +6,7 @@ interface Card {
   id: string
   name: string
   blurb: string | null
+  tally?: { voted: number; total: number }
 }
 
 interface Props {
@@ -117,6 +118,11 @@ export function SwipeDeck({ cards, onVote }: Props) {
           >
             <h2 style={styles.cardName}>{card.name}</h2>
             {card.blurb && <p style={styles.cardBlurb}>{card.blurb}</p>}
+            {card.tally && (
+              <p style={styles.tally}>
+                {card.tally.voted} of {card.tally.total} voted
+              </p>
+            )}
           </animated.div>
         )
       })}
@@ -231,6 +237,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 18,
     cursor: 'pointer',
     fontWeight: 700,
+  },
+  tally: {
+    margin: '12px 0 0',
+    fontSize: 13,
+    color: '#888',
   },
   swipeHint: {
     position: 'absolute',

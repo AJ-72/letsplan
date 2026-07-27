@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
 import { castVote } from './lib/votes'
+import { useTally } from './lib/useTally'
 import { SwipeDeck } from './components/SwipeDeck'
 import type { Session } from '@supabase/supabase-js'
 
@@ -15,14 +16,16 @@ interface Suggestion {
   place: Place
 }
 
-
 function SignedIn({ session }: { session: Session }) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const [roundId, setRoundId] = useState<string | null>(null)
+  const [groupId, setGroupId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+
+  const tally = useTally(roundId, groupId)
 
   useEffect(() => {
     async function load() {
-      // find the open round for a group this user belongs to
       const { data: member } = await supabase
         .from('group_members')
         .select('group_id')
@@ -31,6 +34,7 @@ function SignedIn({ session }: { session: Session }) {
         .single()
 
       if (!member) { setLoading(false); return }
+      setGroupId(member.group_id)
 
       const { data: round } = await supabase
         .from('suggestion_rounds')
@@ -42,6 +46,7 @@ function SignedIn({ session }: { session: Session }) {
         .single()
 
       if (!round) { setLoading(false); return }
+      setRoundId(round.id)
 
       const { data } = await supabase
         .from('suggestions')
@@ -64,7 +69,12 @@ function SignedIn({ session }: { session: Session }) {
       <p>Signed in as {session.user.email}</p>
       {loading ? <p>Loading…</p> : (
         <SwipeDeck
-          cards={suggestions.map(s => ({ id: s.id, name: s.place.name, blurb: s.place.blurb }))}
+          cards={suggestions.map(s => ({
+            id: s.id,
+            name: s.place.name,
+            blurb: s.place.blurb,
+            tally: tally[s.id],
+          }))}
           onVote={(id, vote) => castVote(id, vote).catch(console.error)}
         />
       )}
