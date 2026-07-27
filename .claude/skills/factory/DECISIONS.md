@@ -176,5 +176,17 @@ and only appears as latency on real phones — i.e. at the definition-of-done te
 **No custom domain needed.** Cloudflare Pages issues a `*.pages.dev` URL, which satisfies
 the "send a link" adoption strategy from D2.
 
+## D10 — T6 verification deferred to after T7
+The four RLS attack checks in T6's done-condition require rows in the database to attack.
+The migration applies cleanly to an empty database, but the verification proof does not —
+you cannot assert "Group A sees zero of Group B's rows" when neither group has rows.
+
+**Decision:** apply T6's migration in order (before seed data exists), defer the four
+verification attacks to immediately after T7. T6 is not marked done until the attacks pass.
+
+**Class of gap:** verification dependency ≠ build dependency. The plan conflated them.
+For future tasks: if a done-condition says "run X against Y", check whether Y exists at
+the point the task runs. An autonomous loop would have blocked or silently skipped here.
+
 **Human dependency noted:** T19 requires four people and four phones simultaneously. It is
 the only task in the plan blocked by other humans' calendars rather than by code.
