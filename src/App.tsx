@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
+import { SwipeDeck } from './components/SwipeDeck'
 import type { Session } from '@supabase/supabase-js'
 
 interface Place {
@@ -13,20 +14,6 @@ interface Suggestion {
   place: Place
 }
 
-function Deck({ suggestions }: { suggestions: Suggestion[] }) {
-  if (suggestions.length === 0) return <p>No suggestions in this round.</p>
-
-  return (
-    <ul>
-      {suggestions.map(s => (
-        <li key={s.id}>
-          <strong>{s.place.name}</strong>
-          {s.place.blurb && <span> — {s.place.blurb}</span>}
-        </li>
-      ))}
-    </ul>
-  )
-}
 
 function SignedIn({ session }: { session: Session }) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
@@ -74,7 +61,12 @@ function SignedIn({ session }: { session: Session }) {
     <div>
       <h1>Let's Plan</h1>
       <p>Signed in as {session.user.email}</p>
-      {loading ? <p>Loading…</p> : <Deck suggestions={suggestions} />}
+      {loading ? <p>Loading…</p> : (
+        <SwipeDeck
+          cards={suggestions.map(s => ({ id: s.id, name: s.place.name, blurb: s.place.blurb }))}
+          onVote={(id, vote) => console.log('vote', id, vote)}
+        />
+      )}
       <button onClick={signOut}>Sign out</button>
     </div>
   )
