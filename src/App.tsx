@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
+import { castVote } from './lib/votes'
 import { SwipeDeck } from './components/SwipeDeck'
 import type { Session } from '@supabase/supabase-js'
 
@@ -64,7 +65,7 @@ function SignedIn({ session }: { session: Session }) {
       {loading ? <p>Loading…</p> : (
         <SwipeDeck
           cards={suggestions.map(s => ({ id: s.id, name: s.place.name, blurb: s.place.blurb }))}
-          onVote={(id, vote) => console.log('vote', id, vote)}
+          onVote={(id, vote) => castVote(id, vote).catch(console.error)}
         />
       )}
       <button onClick={signOut}>Sign out</button>
