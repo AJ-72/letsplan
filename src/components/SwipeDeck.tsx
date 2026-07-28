@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSprings, animated, to } from '@react-spring/web'
 import { useDrag } from '@use-gesture/react'
 
@@ -17,15 +17,16 @@ interface Props {
 const SWIPE_THRESHOLD = 100
 const ROTATION_FACTOR = 0.1
 
-function cardStyles(i: number, total: number) {
-  const isTop = i === total - 1
-  const offset = (total - 1 - i) * 6
+// Visual position for a card at stackPos out of total visible
+function stackStyle(stackPos: number, total: number) {
+  const isTop = stackPos === total - 1
+  const offset = (total - 1 - stackPos) * 6
   return {
     x: 0,
     y: -offset,
-    scale: isTop ? 1 : 0.95 - (total - 1 - i) * 0.02,
+    scale: isTop ? 1 : 0.95 - (total - 1 - stackPos) * 0.02,
     rotate: 0,
-    opacity: i < total - 3 ? 0 : 1,
+    opacity: stackPos < total - 3 ? 0 : 1,
   }
 }
 
@@ -33,12 +34,27 @@ export function SwipeDeck({ cards, onVote }: Props) {
   const [gone, setGone] = useState<Set<string>>(new Set())
   const [dragX, setDragX] = useState(0)
 
-  const remaining = cards.filter(c => !gone.has(c.id))
-
-  const [springs, api] = useSprings(remaining.length, i => ({
-    ...cardStyles(i, remaining.length),
+  // Springs are indexed 1-to-1 with `cards` and never change length.
+  const [springs, api] = useSprings(cards.length, i => ({
+    ...stackStyle(i, cards.length),
     config: { friction: 50, tension: 500 },
   }))
+
+  // Re-stack remaining cards whenever a card is removed.
+  useEffect(() => {
+    const visible = cards
+      .map((c, i) => ({ idx: i, card: c }))
+      .filter(({ card }) => !gone.has(card.id))
+
+    api.start(i => {
+      const stackPos = visible.findIndex(v => v.idx === i)
+      if (stackPos === -1) return // already flown off, leave it
+      return {
+        ...stackStyle(stackPos, visible.length),
+        config: { friction: 50, tension: 500 },
+      }
+    })
+  }, [gone]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const bind = useDrag(({ args: [cardId], active, movement: [mx], velocity: [vx], direction: [dx] }) => {
     setDragX(active ? mx : 0)
@@ -48,9 +64,10 @@ export function SwipeDeck({ cards, onVote }: Props) {
     if (!active && trigger) {
       const vote = mx > 0 ? 'yes' : 'pass'
       const flyX = (200 + window.innerWidth) * dx
+      const cardIdx = cards.findIndex(c => c.id === cardId)
 
       api.start(i => {
-        if (remaining[i]?.id !== cardId) return
+        if (i !== cardIdx) return
         return {
           x: flyX,
           rotate: mx * ROTATION_FACTOR,
@@ -63,13 +80,13 @@ export function SwipeDeck({ cards, onVote }: Props) {
         setGone(prev => new Set(prev).add(cardId))
         onVote(cardId, vote)
         setDragX(0)
-        api.start(i => cardStyles(i, remaining.length - 1))
       }, 200)
       return
     }
 
+    const cardIdx = cards.findIndex(c => c.id === cardId)
     api.start(i => {
-      if (remaining[i]?.id !== cardId) return
+      if (i !== cardIdx) return
       return {
         x: active ? mx : 0,
         rotate: active ? mx * ROTATION_FACTOR : 0,
@@ -78,6 +95,8 @@ export function SwipeDeck({ cards, onVote }: Props) {
       }
     })
   })
+
+  const remaining = cards.filter(c => !gone.has(c.id))
 
   if (remaining.length === 0) {
     return (
@@ -94,13 +113,11 @@ export function SwipeDeck({ cards, onVote }: Props) {
 
   return (
     <div style={styles.deck}>
-      {/* hint labels */}
       <div style={{ ...styles.hint, ...styles.hintYes, opacity: yesOpacity }}>YES ✓</div>
       <div style={{ ...styles.hint, ...styles.hintPass, opacity: passOpacity }}>PASS ✕</div>
 
-      {springs.map((spring, i) => {
-        const card = remaining[i]
-        if (!card) return null
+      {cards.map((card, i) => {
+        if (gone.has(card.id)) return null
         return (
           <animated.div
             key={card.id}
@@ -108,10 +125,10 @@ export function SwipeDeck({ cards, onVote }: Props) {
             style={{
               ...styles.card,
               transform: to(
-                [spring.x, spring.y, spring.rotate, spring.scale],
+                [springs[i].x, springs[i].y, springs[i].rotate, springs[i].scale],
                 (x, y, r, s) => `translate(${x}px, ${y}px) rotate(${r}deg) scale(${s})`
               ),
-              opacity: spring.opacity,
+              opacity: springs[i].opacity,
               zIndex: i,
               touchAction: 'none',
             }}
@@ -127,17 +144,16 @@ export function SwipeDeck({ cards, onVote }: Props) {
         )
       })}
 
-      {/* accessible button fallback */}
       <div style={styles.buttons}>
         <button style={styles.btnPass} onClick={() => {
-          onVote(topCard.id, 'pass')
           setGone(prev => new Set(prev).add(topCard.id))
+          onVote(topCard.id, 'pass')
         }}>
           ✕ Pass
         </button>
         <button style={styles.btnYes} onClick={() => {
-          onVote(topCard.id, 'yes')
           setGone(prev => new Set(prev).add(topCard.id))
+          onVote(topCard.id, 'yes')
         }}>
           ✓ Yes
         </button>
