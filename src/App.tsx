@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
 import { castVote } from './lib/votes'
 import { useTally } from './lib/useTally'
+import { useRound } from './lib/useRound'
 import { SwipeDeck } from './components/SwipeDeck'
 import type { Session } from '@supabase/supabase-js'
 
@@ -23,6 +24,7 @@ function SignedIn({ session }: { session: Session }) {
   const [loading, setLoading] = useState(true)
 
   const tally = useTally(roundId, groupId)
+  const round = useRound(roundId)
 
   useEffect(() => {
     async function load() {
@@ -59,15 +61,13 @@ function SignedIn({ session }: { session: Session }) {
     load()
   }, [session.user.id])
 
-  async function signOut() {
-    await supabase.auth.signOut()
-  }
-
-  return (
-    <div>
-      <h1>Let's Plan</h1>
-      <p>Signed in as {session.user.email}</p>
-      {loading ? <p>Loading…</p> : (
+  function renderContent() {
+    if (!round || round.status === 'open') {
+      const winnerName = round?.winner_suggestion_id
+        ? suggestions.find(s => s.id === round.winner_suggestion_id)?.place.name
+        : null
+      void winnerName // unused in open state, suppress lint
+      return (
         <SwipeDeck
           cards={suggestions.map(s => ({
             id: s.id,
@@ -77,7 +77,47 @@ function SignedIn({ session }: { session: Session }) {
           }))}
           onVote={(id, vote) => castVote(id, vote).catch(console.error)}
         />
-      )}
+      )
+    }
+
+    if (round.status === 'resolved') {
+      const winner = suggestions.find(s => s.id === round.winner_suggestion_id)
+      return (
+        <div>
+          <h2>We're going to…</h2>
+          <h3>{winner?.place.name ?? 'Unknown'}</h3>
+          <p>{winner?.place.blurb}</p>
+        </div>
+      )
+    }
+
+    if (round.status === 'tie') {
+      return (
+        <div>
+          <h2>It's a tie!</h2>
+          <p>The group liked two options equally. Settle it between yourselves.</p>
+        </div>
+      )
+    }
+
+    // no_result
+    return (
+      <div>
+        <h2>No result</h2>
+        <p>Not enough people voted before the round closed.</p>
+      </div>
+    )
+  }
+
+  async function signOut() {
+    await supabase.auth.signOut()
+  }
+
+  return (
+    <div>
+      <h1>Let's Plan</h1>
+      <p>Signed in as {session.user.email}</p>
+      {loading ? <p>Loading…</p> : renderContent()}
       <button onClick={signOut}>Sign out</button>
     </div>
   )
