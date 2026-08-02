@@ -4,6 +4,7 @@ import { castVote } from './lib/votes'
 import { useTally } from './lib/useTally'
 import { useRound } from './lib/useRound'
 import { SwipeDeck } from './components/SwipeDeck'
+import { TieSettlement } from './components/TieSettlement'
 import type { Session } from '@supabase/supabase-js'
 
 interface Place {
@@ -63,10 +64,6 @@ function SignedIn({ session }: { session: Session }) {
 
   function renderContent() {
     if (!round || round.status === 'open') {
-      const winnerName = round?.winner_suggestion_id
-        ? suggestions.find(s => s.id === round.winner_suggestion_id)?.place.name
-        : null
-      void winnerName // unused in open state, suppress lint
       return (
         <SwipeDeck
           cards={suggestions.map(s => ({
@@ -93,10 +90,16 @@ function SignedIn({ session }: { session: Session }) {
 
     if (round.status === 'tie') {
       return (
-        <div>
-          <h2>It's a tie!</h2>
-          <p>The group liked two options equally. Settle it between yourselves.</p>
-        </div>
+        <TieSettlement
+          roundId={round.id}
+          suggestions={suggestions.map(s => ({
+            id: s.id,
+            name: s.place.name,
+            blurb: s.place.blurb,
+          }))}
+          tally={tally}
+          settledSuggestionId={round.settled_suggestion_id}
+        />
       )
     }
 

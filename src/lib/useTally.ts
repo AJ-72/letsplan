@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
 
+export interface SuggestionTally {
+  voted: number
+  yes: number
+  total: number
+}
+
 interface Tally {
-  [suggestionId: string]: { voted: number; total: number }
+  [suggestionId: string]: SuggestionTally
 }
 
 export function useTally(roundId: string | null, groupId: string | null) {
@@ -11,34 +17,37 @@ export function useTally(roundId: string | null, groupId: string | null) {
   useEffect(() => {
     if (!roundId || !groupId) return
 
-    let total = 0
-
     async function fetchAll() {
-      const [{ data: suggestions }, { data: votes }, { data: members }] = await Promise.all([
-        supabase.from('suggestions').select('id').eq('round_id', roundId),
-        supabase.from('votes_visible').select('suggestion_id').in(
-          'suggestion_id',
-          (await supabase.from('suggestions').select('id').eq('round_id', roundId)).data?.map(s => s.id) ?? []
-        ),
+      const { data: suggestions } = await supabase
+        .from('suggestions')
+        .select('id')
+        .eq('round_id', roundId)
+
+      const ids = suggestions?.map(s => s.id) ?? []
+      if (ids.length === 0) { setTally({}); return }
+
+      const [{ data: votes }, { data: members }] = await Promise.all([
+        // votes_visible, never the base table -- see D7
+        supabase.from('votes_visible').select('suggestion_id, value').in('suggestion_id', ids),
         supabase.from('group_members').select('user_id').eq('group_id', groupId),
       ])
 
-      total = members?.length ?? 0
-      const suggestionIds = new Set(suggestions?.map(s => s.id) ?? [])
+      const total = members?.length ?? 0
       const counts: Tally = {}
+      for (const id of ids) counts[id] = { voted: 0, yes: 0, total }
 
-      for (const id of suggestionIds) {
-        counts[id] = { voted: 0, total }
-      }
       for (const v of votes ?? []) {
-        if (counts[v.suggestion_id]) counts[v.suggestion_id].voted++
+        const row = counts[v.suggestion_id]
+        if (!row) continue
+        row.voted++
+        if (v.value === 'yes') row.yes++
       }
+
       setTally(counts)
     }
 
     fetchAll()
 
-    // realtime: re-fetch tally on any vote insert/update for this round
     const channel = supabase
       .channel(`votes:round:${roundId}`)
       .on(
